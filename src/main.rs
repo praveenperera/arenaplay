@@ -42,7 +42,7 @@ pub struct App {}
 
 fn main() {
     let container = Container::new();
-    let app = &container.memory[container.app];
+    let app = container.memory[container.app];
     let bump_container = BumpContainer::my_new();
 
     let app = bump_container.with_app(|app| app);
