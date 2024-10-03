@@ -4,8 +4,8 @@ use ouroboros::self_referencing;
 use id_arena::{Arena as IdArena, Id};
 
 pub struct IdContainer {
-    memory: IdArena<App>,
-    app: Id<App>,
+    pub memory: IdArena<App>,
+    pub app: Id<App>,
 }
 
 impl IdContainer {
@@ -22,15 +22,15 @@ impl IdContainer {
 pub struct BumpContainer {
     pub memory: Bump,
 
-    #[borrows(memory)]
-    pub app: &'this App,
+    #[borrows(mut memory)]
+    pub app: &'this mut App,
 }
 
 impl BumpContainer {
-    fn my_new() -> Self {
+    pub fn my_new() -> Self {
         BumpContainerBuilder {
             memory: Bump::new(),
-            app_builder: |memory: &Bump| {
+            app_builder: |memory: &mut Bump| {
                 let app = memory.alloc(App {
                     name: "hello".to_string(),
                 });
@@ -61,19 +61,32 @@ mod tests {
     use super::*;
 
     #[test]
-    fn main() {
+    fn test_mut_for_both() {
         // id_arena
         let mut id_container = IdContainer::new();
         let id_app = &mut id_container.memory[id_container.app];
+        assert_eq!(id_app.name, "hello");
         id_app.name = "world".to_string();
 
         // bumpalo + ouroboros
         let mut bump_container = BumpContainer::my_new();
-        let bump_app = &mut bump_container.with_app_mut(|&mut app: &mut &App| app);
-        // let mut app = &mut bump_container.with_app_mut(|&mut app: &mut &App| app);
-        // bump_app.change_name("world");
+        let bump_app = bump_container.with_app(|app| app);
+        assert_eq!(bump_app.name, "hello");
+
+        bump_container.with_mut(|fields| {
+            (**fields.app).name = "world".to_string();
+        });
+
+        let bump_app = bump_container.with_app(|app| app);
 
         assert_eq!(id_app.name, "world");
         assert_eq!(bump_app.name, "world");
+
+        bump_container.with_app_mut(|app| {
+            (**app).name = "world2".to_string();
+        });
+
+        let bump_app = bump_container.with_app(|app| app);
+        assert_eq!(bump_app.name, "world2");
     }
 }
